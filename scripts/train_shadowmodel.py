@@ -18,7 +18,7 @@ import wandb
 
 import dataloaders
 import shadow_models as sm
-from models import resnets
+
 
 
 
@@ -58,11 +58,20 @@ parser.add_argument('--save_epochs', metavar='SAVEEPOCHS', help='which epochs to
 
 def main():
     args = parser.parse_args()
-
+    config_dict = {'project': args.project,
+                   'expname': args.expname,
+                   'force_include': args.force_include,
+                   'force_exclude': args.force_exclude,
+                   'model': args.model,
+                   'modelseed': args.modelseed,
+                   'dataset': args.dataset,
+                   'dataseed': args.dataseed}
+    print("ARGS", args)
     # Step 1: Set up model + logger
     base_model = sm.load_resnet(args.model, 10, args.modelseed)
     logger = WandbLogger(project=args.project, name=args.expname)
-    logger.config.update(dict(args))
+
+    #logger.experiment.config.update(config_dict)
 
     shadow_model = sm.ShadowModel(base_model, logger=logger)
 
@@ -98,3 +107,5 @@ def main():
     trainer.fit(shadow_model, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
 
+if __name__ == '__main__':
+    main()

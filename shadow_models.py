@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import torchvision
 import numpy as np
 import os
 import glob
@@ -18,8 +19,8 @@ full_path = os.path.realpath(__file__)
 
 def load_resnet(resnet_name, num_classes, model_seed=None):
     if model_seed is not None:
-        torch.manua
-    model = torchvision.models(resnet_name)
+        torch.manual_seed(model_seed)
+    model = eval('torchvision.models.%s()' % resnet_name)
     model.fc = nn.Linear(model.fc.in_features, num_classes)
     return model
 
@@ -30,7 +31,7 @@ def load_resnet(resnet_name, num_classes, model_seed=None):
 # =           Shadow Module Lightning Module                           =
 # ======================================================================
 
-class ShadowModel(pl.LightingModule):
+class ShadowModel(pl.LightningModule):
     def __init__(self, model, logger=None):
         super().__init__()
         self.model = model

@@ -74,7 +74,7 @@ def get_index_subset(base_dataset, frac, seed, complement=False,
     idxs = set([_ for _ in range(numel) if check_containment(_, frac, seed)])
 
     if complement:
-        idxs = set([_ for _ in in range(numel) if _ not in idxs])
+        idxs = set([_ for _ in range(numel) if _ not in idxs])
 
 
     if force_include is not None:
@@ -125,7 +125,7 @@ def cifar_augmentation(pad, mirror=False, normalize=True,
     return transforms.Compose(xform_list)
 
 
-class CifarSubset(pl.LightingDataModule):
+class CifarSubset(pl.LightningDataModule):
     def __init__(self, frac:float,
                  seed: int=0,
                  dataset_dir: str= DEFAULT_DATASET_DIR,
