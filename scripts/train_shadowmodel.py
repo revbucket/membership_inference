@@ -67,13 +67,10 @@ def main():
                    'dataset': args.dataset,
                    'dataseed': args.dataseed}
     print("ARGS", args)
-    # Step 1: Set up model + logger
+    # Step 1: Set up model
     base_model = sm.load_resnet(args.model, 10, args.modelseed)
-    logger = WandbLogger(project=args.project, name=args.expname)
 
-    #logger.experiment.config.update(config_dict)
-
-    shadow_model = sm.ShadowModel(base_model, logger=logger)
+    shadow_model = sm.ShadowModel(base_model)
 
 
     if args.modelseed is not None:
@@ -94,11 +91,15 @@ def main():
     checkpoint_path = os.path.join(os.getcwd(), 'shadows', args.project, args.expname,
                                    '%s_dataseed%s_modelseed%s' % (args.model, args.dataseed, args.modelseed))
     # Step 4: Setup trainer and train
+    logger = WandbLogger(project=args.project, name=args.expname)
+    logger.experiment.config.update(config_dict)
+
     trainer_kwargs = {'accelerator': 'gpu',
                       'devices': args.gpus,
                       'max_epochs': args.epochs,
                       'progress_bar_refresh_rate': 10,
-                      'default_root_dir': checkpoint_pathe}
+                      'default_root_dir': checkpoint_path,
+                      'logger': logger}
     if args.gpus > 1:
         trainer_kwargs['strategy'] = 'ddp'
     trainer = pl.Trainer(**trainer_kwargs)

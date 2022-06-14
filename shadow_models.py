@@ -32,14 +32,13 @@ def load_resnet(resnet_name, num_classes, model_seed=None):
 # ======================================================================
 
 class ShadowModel(pl.LightningModule):
-    def __init__(self, model, logger=None):
+    def __init__(self, model):
         super().__init__()
         self.model = model
         self.train_acc = torchmetrics.Accuracy()
         self.val_acc = torchmetrics.Accuracy()
 
-        if logger is not None:
-            self.logger = logger
+
 
     def forward(self, x):
         return self.model(x)
