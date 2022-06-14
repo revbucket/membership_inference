@@ -37,7 +37,7 @@ parser.add_argument('expname', metavar='NAME', help='name to be saved')
 # Dataset details
 parser.add_argument('--dataset', metavar='DATASET', help='which dataset to use') # cifar10 or cifar100
 parser.add_argument('--dataseed', metavar='DATASEED', help='which dataset seed to use')
-parser.add_argument('--frac', metavar='FRAC', help='fraction of dataset to use')
+parser.add_argument('--frac', metavar='FRAC', help='fraction of dataset to use', type=float)
 parser.add_argument('--force_include', metavar='FORCE_INCLUDE', help='indexes to forcefully include', default=None)
 parser.add_argument('--force_exclude', metavar='FORCE_EXCLUDE', help='indexes to forcefully exclude', default=None)
 
@@ -45,10 +45,10 @@ parser.add_argument('--force_exclude', metavar='FORCE_EXCLUDE', help='indexes to
 # Training details
 parser.add_argument('--model', metavar='MODEL', type=str, help='which model to use', default='resnet18')
 parser.add_argument('--modelseed', metavar='MODELSEED', type=int, help='seed for initializing model', default=None)
-parser.add_argument('--gpus', metavar='GPUS', help='how many gpus to use', default=1)
-parser.add_argument('--batch', metavar='BATCH', help='batch size', default=256)
-parser.add_argument('--workers', metavar='WORKERS', help='number of workers to use', default=os.cpu_count() / 2)
-parser.add_argument('--epochs', metavar='EPOCHS', help='number of epochs to train for', default=100)
+parser.add_argument('--gpus', metavar='GPUS', help='how many gpus to use', type=int, default=1)
+parser.add_argument('--batch', metavar='BATCH', help='batch size', type=int, default=256)
+parser.add_argument('--workers', metavar='WORKERS', help='number of workers to use', type=int, default=os.cpu_count() / 2)
+parser.add_argument('--epochs', metavar='EPOCHS', help='number of epochs to train for', type=int, default=100)
 parser.add_argument('--save_epochs', metavar='SAVEEPOCHS', help='which epochs to save after', default=[50, 100])
 
 
@@ -92,7 +92,8 @@ def main():
                                    '%s_dataseed%s_modelseed%s' % (args.model, args.dataseed, args.modelseed))
     # Step 4: Setup trainer and train
     logger = WandbLogger(project=args.project, name=args.expname)
-    logger.experiment.config.update(config_dict)
+    #wandb.config.update(config_dict)
+    #logger.experiment.config.update(config_dict)
 
     trainer_kwargs = {'accelerator': 'gpu',
                       'devices': args.gpus,

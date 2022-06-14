@@ -44,11 +44,10 @@ class ShadowModel(pl.LightningModule):
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
-        if len(batch) == 2:
-            x, y = batch
-        else:
-            x, idx, y = batch
+        x = batch[0]
+        y = batch[1]
         y_pred = self.model(x)
+        print("Y_PRED", y_pred.shape, y.shape)
         loss = F.cross_entropy(y_pred, y)
         return {'loss': loss, 'preds': y_pred, 'target': y}
 
@@ -58,15 +57,13 @@ class ShadowModel(pl.LightningModule):
         self.log('train/acc', self.train_acc)
 
     def validation_step(self, batch, batch_idx):
-        if len(batch) == 2:
-            x, y = batch
-        else:
-            x, idx, y = batch
+        x = batch[0]
+        y = batch[1]
         y_pred = self.model(x)
         loss = F.cross_entropy(y_pred, y)
         return {'loss': loss, 'preds': y_pred, 'target': y}
 
-    def validation_step_end(self, batch, batch_idx):
+    def validation_step_end(self, outs):
         self.val_acc(outs['preds'], outs['target'])
         self.log('val/loss', outs['loss'], on_step=True, on_epoch=True, sync_dist=True)
         self.log('val/acc', self.val_acc, on_step=True, on_epoch=True, sync_dist=True)

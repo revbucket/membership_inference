@@ -37,7 +37,7 @@ class IndexSubset(torch.utils.data.Subset):
 
     def __getitem__(self, idx):
         x, y = self.dataset[idx]
-        return (x, idx, y)
+        return (x, y, idx)
 
     def __len__(self):
         return len(self.dataset)
@@ -183,7 +183,7 @@ class CifarSubset(pl.LightningDataModule):
 
     def val_dataloader(self, batch_size=128, num_workers=4):
         return DataLoader(self.cifar_val, batch_size=batch_size,
-                          shuffle=True, pin_memory=torch.cuda.is_available(),
+                          shuffle=False, pin_memory=torch.cuda.is_available(),
                           num_workers=num_workers)
 
 
