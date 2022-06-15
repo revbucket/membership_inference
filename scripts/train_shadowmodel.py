@@ -68,7 +68,8 @@ def main():
                    'dataseed': args.dataseed}
     print("ARGS", args)
     # Step 1: Set up model
-    base_model = sm.load_resnet(args.model, 10, args.modelseed)
+    num_classes = 10 if args.dataset == 'cifar10' else 100
+    base_model = sm.load_resnet(args.model, num_classes, args.modelseed)
 
     shadow_model = sm.ShadowModel(base_model)
 
@@ -94,7 +95,7 @@ def main():
 
     wandb.init()
     wandb.config.update(config_dict)
-    logger = WandbLogger(project=args.project, name=args.expname)
+    # logger = WandbLogger(project=args.project,  =args.expname)
     #logger.experiment.config.update(config_dict)
 
     trainer_kwargs = {'accelerator': 'gpu',
@@ -110,7 +111,7 @@ def main():
         trainer_kwargs['devices'] = args.cluster_devices
 
     if args.cluster_nodes is not None:
-        trainer_kwargs['nodes'] = args.cluster_nodes
+        trainer_kwargs['num_nodes'] = args.cluster_nodes
 
 
     trainer = pl.Trainer(**trainer_kwargs)
