@@ -49,8 +49,8 @@ parser.add_argument('--gpus', metavar='GPUS', help='how many gpus to use', type=
 parser.add_argument('--batch', metavar='BATCH', help='batch size', type=int, default=256)
 parser.add_argument('--workers', metavar='WORKERS', help='number of workers to use', type=int, default=os.cpu_count() / 2)
 parser.add_argument('--epochs', metavar='EPOCHS', help='number of epochs to train for', type=int, default=100)
-parser.add_argument('--save_epochs', metavar='SAVEEPOCHS', help='which epochs to save after', default=[50, 100])
-
+parser.add_argument('--cluster_devices', metavar='CLUSTER DEVICES', type=int, default=None)
+parser.add_argument('--cluster_nodes', metavar='CLUSTER NODES', type=int, default=None)
 
 # ===================================================================
 # =           MAIN TRAINING BLOCK                                   =
@@ -92,7 +92,8 @@ def main():
                                    '%s_dataseed%s_modelseed%s' % (args.model, args.dataseed, args.modelseed))
     # Step 4: Setup trainer and train
     logger = WandbLogger(project=args.project, name=args.expname)
-    #wandb.config.update(config_dict)
+    wandb.init()
+    wandb.config.update(config_dict)
     #logger.experiment.config.update(config_dict)
 
     trainer_kwargs = {'accelerator': 'gpu',
@@ -103,6 +104,14 @@ def main():
                       'logger': logger}
     if args.gpus > 1:
         trainer_kwargs['strategy'] = 'ddp'
+
+    if args.cluster_devices is not None:
+        trainer_kwargs['devices'] = args.cluster_devices
+
+    if args.cluster_nodes is not None:
+        trainer_kwargs['nodes'] = args.cluster_nodes
+
+
     trainer = pl.Trainer(**trainer_kwargs)
 
 
