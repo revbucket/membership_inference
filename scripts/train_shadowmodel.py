@@ -91,9 +91,10 @@ def main():
     checkpoint_path = os.path.join(os.getcwd(), 'shadows', args.project, args.expname,
                                    '%s_dataseed%s_modelseed%s' % (args.model, args.dataseed, args.modelseed))
     # Step 4: Setup trainer and train
-    logger = WandbLogger(project=args.project, name=args.expname)
+
     wandb.init()
     wandb.config.update(config_dict)
+    logger = WandbLogger(project=args.project, name=args.expname)
     #logger.experiment.config.update(config_dict)
 
     trainer_kwargs = {'accelerator': 'gpu',
