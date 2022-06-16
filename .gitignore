@@ -1,3 +1,7 @@
 wandb/*
+shadows/*
+slurm_logs/*
 *~
+*.tar
+*#
 __pycache__

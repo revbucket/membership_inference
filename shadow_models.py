@@ -47,7 +47,6 @@ class ShadowModel(pl.LightningModule):
         x = batch[0]
         y = batch[1]
         y_pred = self.model(x)
-        print("Y_PRED", y_pred.shape, y.shape)
         loss = F.cross_entropy(y_pred, y)
         return {'loss': loss, 'preds': y_pred, 'target': y}
 

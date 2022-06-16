@@ -93,9 +93,12 @@ def main():
                                    '%s_dataseed%s_modelseed%s' % (args.model, args.dataseed, args.modelseed))
     # Step 4: Setup trainer and train
 
-    wandb.init()
+    wandb.init(settings=wandb.Settings(start_method='fork'))
+
     wandb.config.update(config_dict)
-    # logger = WandbLogger(project=args.project,  =args.expname)
+
+    logger = WandbLogger(project=args.project,  name=args.expname)
+
     #logger.experiment.config.update(config_dict)
 
     trainer_kwargs = {'accelerator': 'gpu',
