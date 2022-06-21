@@ -86,7 +86,7 @@ def get_index_subset(base_dataset, frac, seed, complement=False,
         if isinstance(force_exclude, int):
             force_exclude = [force_exclude]
         idxs = idxs.difference(set(force_exclude))
-
+    idxs = sorted(list(idxs))
 
     return IndexSubset(base_dataset, idxs)
 
