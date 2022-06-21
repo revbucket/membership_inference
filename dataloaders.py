@@ -32,12 +32,12 @@ Strategy for subsets:
 
 class IndexSubset(torch.utils.data.Subset):
     def __init__(self, dataset, idxs) -> None:
-        self.dataset = dataset
         self.idxs = idxs
+        self.dataset = torch.utils.data.Subset(dataset, idxs)
 
     def __getitem__(self, idx):
         x, y = self.dataset[idx]
-        return (x, y, idx)
+        return (x, y, self.idxs[idx])
 
     def __len__(self):
         return len(self.dataset)
