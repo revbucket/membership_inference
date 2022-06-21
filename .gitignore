@@ -1,7 +1,9 @@
 wandb/*
 shadows/*
 slurm_logs/*
+notebooks/*
 *~
 *.tar
 *#
+
 __pycache__
