@@ -21,6 +21,18 @@ Section('worker').params(
 )
 
 
+
+
+def collect_known_args(self, parser, disable_help=False):
+    args, _ = parser.parse_known_args()
+    for fname in args.config_file:
+        self.collect_config_file(fname)
+
+    args = vars(args)
+    self.collect(args)
+    self.collect_env_variables()
+
+
 def make_config(quiet=False, conf_path=None):
     config = get_current_config()
     if conf_path is not None:
