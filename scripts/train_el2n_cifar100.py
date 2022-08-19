@@ -143,18 +143,14 @@ def train(model, loaders, lr=None, warm=None, epochs=None, label_smoothing=None,
     iters_per_epoch = len(loaders['train'])
     warmup_scheduler = WarmUpLR(opt, iters_per_epoch * warm)
     milestones = [int(_) for _ in milestones.split(';')]
-    train_scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=milestones, gamma=0.2)
+    train_scheduler = lr_scheduler.MultiStepLR(opt, milestones=milestones, gamma=0.2)
     # Use LR schedule from https://github.com/weiaicunzai/pytorch-cifar100
     # Cyclic LR with single triangle
-    lr_schedule = np.interp(np.arange((epochs+1) * iters_per_epoch),
-                            [0, lr_peak_epoch * iters_per_epoch, epochs * iters_per_epoch],
-                            [0, 1, 0])
-    scheduler = lr_scheduler.LambdaLR(opt, lr_schedule.__getitem__)
     scaler = GradScaler()
     loss_fn = CrossEntropyLoss(label_smoothing=label_smoothing)
 
-    for epoch in range(epochs):
-        for ims, labs, idxs in tqdm(loaders['train']):
+    for epoch in tqdm(range(epochs)):
+        for ims, labs, idxs in loaders['train']:
             opt.zero_grad(set_to_none=True)
             with autocast():
                 out = model(ims)
