@@ -212,7 +212,7 @@ def evaluate_pruning(model, model_id, loaders, epoch):
                             'epoch': epoch,
                             'train': (k == 'train'),
                             'el2n': el2n_batch[i],
-                            'grand': grand_batch[i]
+                            'grand': grand_batch[i],
                             'exid': batch[2][i]} for i in range(len(batch[2]))])
 
 
