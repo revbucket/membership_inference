@@ -141,7 +141,6 @@ def train(model, loaders, lr=None, warm=None, epochs=None, label_smoothing=None,
           momentum=None, weight_decay=None, milestones=None):
     opt = SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
     iters_per_epoch = len(loaders['train'])
-    warmup_scheduler = WarmUpLR(opt, iters_per_epoch * warm)
     milestones = [int(_) for _ in milestones.split(';')]
     train_scheduler = lr_scheduler.MultiStepLR(opt, milestones=milestones, gamma=0.2)
     # Use LR schedule from https://github.com/weiaicunzai/pytorch-cifar100
@@ -159,11 +158,8 @@ def train(model, loaders, lr=None, warm=None, epochs=None, label_smoothing=None,
             scaler.scale(loss).backward()
             scaler.step(opt)
             scaler.update()
+        train_scheduler.step(epoch)
 
-        if epoch <= warm:
-            warmup_scheduler.step()
-        else:
-            train_scheduler.step(epoch)
 
 
 
