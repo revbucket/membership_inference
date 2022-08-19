@@ -69,8 +69,8 @@ def make_dataloaders(train_dataset=None, val_dataset=None, batch_size=None, num_
     }
     device = 'cuda:%s' % gpu
     start_time = time.time()
-    CIFAR_MEAN = [125.307, 122.961, 113.8575]
-    CIFAR_STD = [51.5865, 50.847, 51.255]
+    CIFAR100_MEAN = [129.00247, 123.91845, 112.48435]
+    CIFAR100_STD = [68.25503, 65.30334, 70.368256]
     loaders = {}
     for name in ['train', 'test']:
         label_pipeline: List[Operation] = [IntDecoder(), ToTensor(), ToDevice(device), Squeeze()]
@@ -87,7 +87,7 @@ def make_dataloaders(train_dataset=None, val_dataset=None, batch_size=None, num_
             ToDevice(device, non_blocking=True),
             ToTorchImage(),
             Convert(ch.float16),
-            #torchvision.transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+            torchvision.transforms.Normalize(CIFAR100_MEAN, CIFAR100_STD),
         ])
         ordering = OrderOption.RANDOM if name == 'train' else OrderOption.SEQUENTIAL
         loaders[name] = Loader(paths[name], indices=None,
