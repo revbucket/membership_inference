@@ -51,7 +51,7 @@ def grand_minibatch(model, minibatch):
 
 
     x, y = minibatch[0], minibatch[1]
-    optimizer = optim.SGD(model, lr=1e-3)
+    optimizer = optim.SGD(model.parameters(), lr=1e-3)
     output = torch.zeros(x.shape[0])
     with autocast():
         for i, (subx, suby) in enumerate(zip(x, y)):

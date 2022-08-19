@@ -27,6 +27,8 @@ from ffcv.transforms import RandomHorizontalFlip, Cutout, \
 from ffcv.transforms.common import Squeeze
 from pymongo import MongoClient
 
+import pruning_metrics as pm
+
 # ======================================================================
 # =           Setting Hyperparameters                                  =
 # ======================================================================
@@ -72,14 +74,15 @@ Section('data', 'data related stuff').params(
 def make_dataloaders(train_dataset=None, val_dataset=None, batch_size=None, num_workers=None, gpu=None):
     paths = {
         'train': train_dataset,
-        'test': val_dataset
+        'test': val_dataset,
+        'eval_train': train_dataset, # evaluating the training dataset
     }
     device = 'cuda:%s' % gpu
     start_time = time.time()
     CIFAR100_MEAN = [129.00247, 123.91845, 112.48435]
     CIFAR100_STD = [68.25503, 65.30334, 70.368256]
     loaders = {}
-    for name in ['train', 'test']:
+    for name in ['train', 'test', 'eval_train']:
         label_pipeline: List[Operation] = [IntDecoder(), ToTensor(), ToDevice(device), Squeeze()]
         index_pipeline: List[Operation] = [IntDecoder(), ToTensor(), ToDevice(device), Squeeze()]
         image_pipeline: List[Operation] = [SimpleRGBImageDecoder()]
@@ -204,8 +207,8 @@ def evaluate_pruning(model, model_id, loaders, epoch):
     model = model.eval()
     output = []
 
-    for k in ('train', 'test'):
-        for batch in loaders[k]:
+    for k in ('eval_train', 'test'):
+        for batch in tqdm(loaders[k]):
             el2n_batch = pm.el2n_minibatch(model, batch, 100).cpu().data
             grand_batch = pm.grand_minibatch(model, batch)
 
@@ -214,7 +217,7 @@ def evaluate_pruning(model, model_id, loaders, epoch):
                             'train': (k == 'train'),
                             'el2n': el2n_batch[i],
                             'grand': grand_batch[i],
-                            'exid': batch[2][i]} for i in range(len(batch[2]))])
+                            'exid': batch[2][i].item()} for i in range(len(batch[2]))])
 
 
     return output
