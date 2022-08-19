@@ -12,6 +12,8 @@ import torch as ch
 from torch.cuda.amp import GradScaler, autocast
 from torch.nn import CrossEntropyLoss
 from torch.optim import SGD, lr_scheduler
+from torch.optim.lr_scheduler import _LRScheduler
+
 import torchvision
 
 from fastargs import get_current_config, Param, Section
@@ -29,13 +31,14 @@ from ffcv.transforms.common import Squeeze
 # ======================================================================
 
 Section('training', 'Hyperparameters').params(
-    lr=Param(float, 'The learning rate to use', default=0.5),
-    epochs=Param(int, 'Number of epochs to run for', default=24),
-    lr_peak_epoch=Param(int, 'Peak epoch for cyclic lr', default=5),
+    lr=Param(float, 'The learning rate to use', default=0.1),
+    epochs=Param(int, 'Number of epochs to run for', default=201),
+    warm=Param(int, 'Number of epochs to warmup for', default=1),
     batch_size=Param(int, 'Batch size', default=512),
     momentum=Param(float, 'Momentum for SGD', default=0.9),
     weight_decay=Param(float, 'l2 weight decay', default=5e-4),
     label_smoothing=Param(float, 'Value of label smoothing', default=0.1),
+    milestones=Param(str, 'Epochs at which to reduce LR: Semicolon separated string', default='60;120;160'),
     num_workers=Param(int, 'The number of workers', default=4),
     lr_tta=Param(bool, 'Test time augmentation by averaging with horizontally flipped version', default=True),
     gpu=Param(int, 'Which GPU to use', default=0)
@@ -70,12 +73,10 @@ def make_dataloaders(train_dataset=None, val_dataset=None, batch_size=None, num_
     CIFAR_MEAN = [125.307, 122.961, 113.8575]
     CIFAR_STD = [51.5865, 50.847, 51.255]
     loaders = {}
-
     for name in ['train', 'test']:
         label_pipeline: List[Operation] = [IntDecoder(), ToTensor(), ToDevice(device), Squeeze()]
         index_pipeline: List[Operation] = [IntDecoder(), ToTensor(), ToDevice(device), Squeeze()]
         image_pipeline: List[Operation] = [SimpleRGBImageDecoder()]
-
         if name == 'train':
             image_pipeline.extend([
                 RandomHorizontalFlip(),
@@ -87,24 +88,41 @@ def make_dataloaders(train_dataset=None, val_dataset=None, batch_size=None, num_
             ToDevice(device, non_blocking=True),
             ToTorchImage(),
             Convert(ch.float16),
-            torchvision.transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+            #torchvision.transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
         ])
-
         ordering = OrderOption.RANDOM if name == 'train' else OrderOption.SEQUENTIAL
-
         loaders[name] = Loader(paths[name], indices=None,
                                batch_size=batch_size, num_workers=num_workers,
                                order=ordering, drop_last=(name == 'train'),
                                pipelines={'image': image_pipeline, 'label': label_pipeline,
                                           'index': index_pipeline})
-
     return loaders
 
-
-def construct_model():
+@param('training.gpu')
+def construct_model(gpu=None):
     num_class = 100
     model = torchvision.models.resnet18(pretrained=False, num_classes=100)
+    if gpu is not None:
+        model = model.to(gpu)
     return model
+
+
+class WarmUpLR(_LRScheduler):
+    """warmup_training learning rate scheduler
+    Args:
+        optimizer: optimzier(e.g. SGD)
+        total_iters: totoal_iters of warmup phase
+    """
+    def __init__(self, optimizer, total_iters, last_epoch=-1):
+
+        self.total_iters = total_iters
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        """we will use the first m batches, and set the learning
+        rate to base_lr * m / total_iters
+        """
+        return [base_lr * self.last_epoch / (self.total_iters + 1e-8) for base_lr in self.base_lrs]
 
 
 # ======================================================================================
@@ -113,15 +131,20 @@ def construct_model():
 
 
 @param('training.lr')
+@param('training.warm')
 @param('training.epochs')
 @param('training.momentum')
 @param('training.weight_decay')
 @param('training.label_smoothing')
-@param('training.lr_peak_epoch')
-def train(model, loaders, lr=None, epochs=None, label_smoothing=None,
-          momentum=None, weight_decay=None, lr_peak_epoch=None):
+@param('training.milestones')
+def train(model, loaders, lr=None, warm=None, epochs=None, label_smoothing=None,
+          momentum=None, weight_decay=None, milestones=None):
     opt = SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
     iters_per_epoch = len(loaders['train'])
+    warmup_scheduler = WarmUpLR(opt, iters_per_epoch * warm)
+    milestones = [int(_) for _ in milestones.split(';')]
+    train_scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=milestones, gamma=0.2)
+    # Use LR schedule from https://github.com/weiaicunzai/pytorch-cifar100
     # Cyclic LR with single triangle
     lr_schedule = np.interp(np.arange((epochs+1) * iters_per_epoch),
                             [0, lr_peak_epoch * iters_per_epoch, epochs * iters_per_epoch],
@@ -130,7 +153,7 @@ def train(model, loaders, lr=None, epochs=None, label_smoothing=None,
     scaler = GradScaler()
     loss_fn = CrossEntropyLoss(label_smoothing=label_smoothing)
 
-    for _ in range(epochs):
+    for epoch in range(epochs):
         for ims, labs, idxs in tqdm(loaders['train']):
             opt.zero_grad(set_to_none=True)
             with autocast():
@@ -140,16 +163,23 @@ def train(model, loaders, lr=None, epochs=None, label_smoothing=None,
             scaler.scale(loss).backward()
             scaler.step(opt)
             scaler.update()
-            scheduler.step()
+
+        if epoch <= warm:
+            warmup_scheduler.step()
+        else:
+            train_scheduler.step(epoch)
+
+
 
 @param('training.lr_tta')
 def evaluate(model, loaders, lr_tta=False):
     model.eval()
-    count = correct = 0
+    count = 0
+    correct = 0
     with ch.no_grad():
         all_margins = []
         for ims, labs, idxs in tqdm(loaders['test']):
-            count += ims.shape[0]
+            count += labs.numel()
 
             with autocast():
                 out = model(ims)
@@ -165,6 +195,7 @@ def evaluate(model, loaders, lr_tta=False):
         all_margins = ch.cat(all_margins)
 
         print('Average margin:', all_margins.mean())
+        print("Top1 Accuracy", float(correct) / count)
         return (all_margins.numpy(), float(correct) / count)
 
 def main(index, logdir):
