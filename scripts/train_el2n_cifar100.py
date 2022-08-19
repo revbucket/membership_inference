@@ -54,8 +54,10 @@ Section('data', 'data related stuff').params(
         default='/home/mgj528/datasets/ffcv/cifar100_train'), # REWRITE HARDCODE
     val_dataset=Param(str, '.dat file to use for validation',
         default='/home/mgj528/datasets/ffcv/cifar100_test'), # REWRITE HARDCODE
-    mongo_db=Param(str, 'database name for the mongodb'),
-    mongo_coll=Param(str, 'collection name for the mongodb')
+    mongo_db=Param(str, 'database name for the mongodb',
+                   default='datadiet'),
+    mongo_coll=Param(str, 'collection name for the mongodb',
+                     default='resnet18_cifar100')
 )
 
 
@@ -227,7 +229,7 @@ def evaluate_pruning(model, model_id, loaders, epoch):
 @param('data.mongo_coll')
 @param('training.round_size')
 @param('training.num_rounds')
-def main(index, logdir, mogno_db=None, mongo_coll=None,
+def main(index, mongo_db=None, mongo_coll=None,
          round_size=None, num_rounds=None):
     config = get_current_config()
     parser = ArgumentParser(description='Fast CIFAR-10 training')
