@@ -32,13 +32,12 @@ from ffcv.transforms.common import Squeeze
 
 Section('training', 'Hyperparameters').params(
     lr=Param(float, 'The learning rate to use', default=0.1),
-    epochs=Param(int, 'Number of epochs to run for', default=201),
-    warm=Param(int, 'Number of epochs to warmup for', default=1),
+    lr_peak_epoch=Param(int, 'Epoch at which LR peaks', default=20),
+    epochs=Param(int, 'Number of epochs to run for', default=50),
     batch_size=Param(int, 'Batch size', default=512),
     momentum=Param(float, 'Momentum for SGD', default=0.9),
     weight_decay=Param(float, 'l2 weight decay', default=5e-4),
     label_smoothing=Param(float, 'Value of label smoothing', default=0.1),
-    milestones=Param(str, 'Epochs at which to reduce LR: Semicolon separated string', default='60;120;160'),
     num_workers=Param(int, 'The number of workers', default=4),
     lr_tta=Param(bool, 'Test time augmentation by averaging with horizontally flipped version', default=True),
     gpu=Param(int, 'Which GPU to use', default=0)
@@ -102,27 +101,14 @@ def make_dataloaders(train_dataset=None, val_dataset=None, batch_size=None, num_
 def construct_model(gpu=None):
     num_class = 100
     model = torchvision.models.resnet18(pretrained=False, num_classes=100)
+
+    # Modify Resnets to be more CIFAR-friendly
+    # https://colab.research.google.com/github/PytorchLightning/lightning-tutorials/blob/publication/.notebooks/lightning_examples/cifar10-baseline.ipynb#scrollTo=96ff098b
+    model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+    model.maxpool = nn.Identity()
     if gpu is not None:
         model = model.to(gpu)
     return model
-
-
-class WarmUpLR(_LRScheduler):
-    """warmup_training learning rate scheduler
-    Args:
-        optimizer: optimzier(e.g. SGD)
-        total_iters: totoal_iters of warmup phase
-    """
-    def __init__(self, optimizer, total_iters, last_epoch=-1):
-
-        self.total_iters = total_iters
-        super().__init__(optimizer, last_epoch)
-
-    def get_lr(self):
-        """we will use the first m batches, and set the learning
-        rate to base_lr * m / total_iters
-        """
-        return [base_lr * self.last_epoch / (self.total_iters + 1e-8) for base_lr in self.base_lrs]
 
 
 # ======================================================================================
@@ -131,24 +117,23 @@ class WarmUpLR(_LRScheduler):
 
 
 @param('training.lr')
-@param('training.warm')
 @param('training.epochs')
+@param('training.label_smoothing')
 @param('training.momentum')
 @param('training.weight_decay')
-@param('training.label_smoothing')
-@param('training.milestones')
-def train(model, loaders, lr=None, warm=None, epochs=None, label_smoothing=None,
-          momentum=None, weight_decay=None, milestones=None):
+@param('training.lr_peak_epoch')
+def train(model, loaders, lr=None, epochs=None, label_smoothing=None,
+          momentum=None, weight_decay=None, lr_peak_epoch=None):
     opt = SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
     iters_per_epoch = len(loaders['train'])
-    milestones = [int(_) for _ in milestones.split(';')]
-    train_scheduler = lr_scheduler.MultiStepLR(opt, milestones=milestones, gamma=0.2)
-    # Use LR schedule from https://github.com/weiaicunzai/pytorch-cifar100
     # Cyclic LR with single triangle
+    lr_schedule = np.interp(np.arange((epochs+1) * iters_per_epoch),
+                            [0, lr_peak_epoch * iters_per_epoch, epochs * iters_per_epoch],
+                            [0, 1, 0])
+    scheduler = lr_scheduler.LambdaLR(opt, lr_schedule.__getitem__)
     scaler = GradScaler()
     loss_fn = CrossEntropyLoss(label_smoothing=label_smoothing)
-
-    for epoch in tqdm(range(epochs)):
+    for _ in tqdm(range(epochs)):
         for ims, labs, idxs in loaders['train']:
             opt.zero_grad(set_to_none=True)
             with autocast():
@@ -158,7 +143,7 @@ def train(model, loaders, lr=None, warm=None, epochs=None, label_smoothing=None,
             scaler.scale(loss).backward()
             scaler.step(opt)
             scaler.update()
-        train_scheduler.step(epoch)
+            scheduler.step()
 
 
 
