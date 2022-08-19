@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 import torch as ch
 from torch.cuda.amp import GradScaler, autocast
-from torch.nn import CrossEntropyLoss
+from torch.nn import CrossEntropyLoss, Conv2d, Identity
 from torch.optim import SGD, lr_scheduler
 from torch.optim.lr_scheduler import _LRScheduler
 
@@ -104,8 +104,8 @@ def construct_model(gpu=None):
 
     # Modify Resnets to be more CIFAR-friendly
     # https://colab.research.google.com/github/PytorchLightning/lightning-tutorials/blob/publication/.notebooks/lightning_examples/cifar10-baseline.ipynb#scrollTo=96ff098b
-    model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
-    model.maxpool = nn.Identity()
+    model.conv1 = Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+    model.maxpool = Identity()
     if gpu is not None:
         model = model.to(gpu)
     return model
