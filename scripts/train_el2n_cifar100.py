@@ -79,8 +79,8 @@ def make_dataloaders(train_dataset=None, val_dataset=None, batch_size=None, num_
         if name == 'train':
             image_pipeline.extend([
                 RandomHorizontalFlip(),
-                RandomTranslate(padding=2, fill=tuple(map(int, CIFAR_MEAN))),
-                Cutout(4, tuple(map(int, CIFAR_MEAN))),
+                RandomTranslate(padding=2, fill=tuple(map(int, CIFAR100_MEAN))),
+                Cutout(4, tuple(map(int, CIFAR100_MEAN))),
             ])
         image_pipeline.extend([
             ToTensor(),
