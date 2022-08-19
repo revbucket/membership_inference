@@ -206,7 +206,7 @@ def evaluate_pruning(model, model_id, loaders, epoch):
 
     for k in ('train', 'test'):
         for batch in loaders[k]:
-            el2n_batch = pm.el2n_minibatch(model, batch, 100)
+            el2n_batch = pm.el2n_minibatch(model, batch, 100).cpu().data
             grand_batch = pm.grand_minibatch(model, batch)
 
             output.extend([{'model_id': model_id,
