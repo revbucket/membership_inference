@@ -25,6 +25,7 @@ from ffcv.pipeline.operation import Operation
 from ffcv.transforms import RandomHorizontalFlip, Cutout, \
     RandomTranslate, Convert, ToDevice, ToTensor, ToTorchImage
 from ffcv.transforms.common import Squeeze
+from pymongo import MongoClient
 
 # ======================================================================
 # =           Setting Hyperparameters                                  =
@@ -138,14 +139,14 @@ def setup_train(model, loaders, lr=None, epochs=None, label_smoothing=None, mome
                             [0, lr_peak_epoch * iters_per_epoch, epochs * iters_per_epoch],
                             [0, 1, 0])
     scheduler = lr_scheduler.LambdaLR(opt, lr_schedule.__getitem__)
-    scaler = GradScaler()
-    loss_fn = CrossEntropyLoss(label_smoothing=label_smoothing)
 
+    loss_fn = CrossEntropyLoss(label_smoothing=label_smoothing)
     return opt, scheduler, loss_fn
 
 
 def resume_train(model, loaders, opt, scheduler, loss_fn, num_epochs):
     model = model.train()
+    scaler = GradScaler()
     for _ in tqdm(range(num_epochs)):
         for ims, labs, idxs in loaders['train']:
             opt.zero_grad(set_to_none=True)
