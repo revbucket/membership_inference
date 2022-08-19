@@ -11,6 +11,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
 from kmeans_pytorch import kmeans
+from torch.cuda.amp import GradScaler, autocast
+
+
 
 
 # ===========================================================
@@ -28,11 +31,12 @@ def el2n_minibatch(model, minibatch, num_classes):
     """ Comptues El2n for a single model/batch
         Returns a vector of scores (of size |minibatch|)
     """
-    x, y = minibatch[0], minibatch[1]
-    prob_vec = torch.softmax(model(x), dim=1)
-    one_hot = F.one_hot(y, num_classes=num_classes).type(prob_vec.dtype)
+    with autocast():
+        x, y = minibatch[0], minibatch[1]
+        prob_vec = torch.softmax(model(x), dim=1)
+        one_hot = F.one_hot(y, num_classes=num_classes).type(prob_vec.dtype)
 
-    return torch.norm(one_hot - prov_vec, p=2, dim=1)
+        return torch.norm(one_hot - prob_vec, p=2, dim=1)
 
 
 def grand_minibatch(model, minibatch):
@@ -43,19 +47,20 @@ def grand_minibatch(model, minibatch):
 
     @torch.no_grad()
     def gradnorm(model=model):
-        return torch.sqrt(sum(p.grad().pow(2).sum() for p in model.parameters())).item
+        return torch.sqrt(sum(p.grad.pow(2).sum() for p in model.parameters())).item()
 
 
     x, y = minibatch[0], minibatch[1]
     optimizer = optim.SGD(model, lr=1e-3)
     output = torch.zeros(x.shape[0])
-    for i, (subx, suby) in enumerate(zip(x, y)):
-        optimizer.zero_grad()
-        suby = torch.LongTensor([suby]).to(subx.device)
-        loss = F.cross_entropy(subx[None], suby)
-        loss.backward()
-        output[i] = gradnorm(model)
-    return output
+    with autocast():
+        for i, (subx, suby) in enumerate(zip(x, y)):
+            optimizer.zero_grad()
+            suby = torch.LongTensor([suby]).to(subx.device)
+            loss = F.cross_entropy(model(subx[None]), suby)
+            loss.backward()
+            output[i] = gradnorm(model)
+        return output
 
 
 def el2n_grand_loader(model, dataloader, scores=None, num_classes=100):
