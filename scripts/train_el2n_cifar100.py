@@ -46,9 +46,9 @@ Section('training', 'Hyperparameters').params(
 
 Section('data', 'data related stuff').params(
     train_dataset=Param(str, '.dat file to use for training',
-        default='/mnt/cfs/datasets/cifar_ffcv/cifar_train.beton'), # REWRITE HARDCODE
+        default='/home/mgj528/datasets/ffcv/cifar100_train'), # REWRITE HARDCODE
     val_dataset=Param(str, '.dat file to use for validation',
-        default='/mnt/cfs/datasets/cifar_ffcv/cifar_val.beton'), # REWRITE HARDCODE
+        default='/home/mgj528/datasets/ffcv/cifar100_test'), # REWRITE HARDCODE
 )
 
 
@@ -207,7 +207,7 @@ def main(index, logdir):
     config.validate(mode='stderr')
     config.summary()
 
-    loaders = make_dataloaders(mask=np.nonzero(mask)[0])
+    loaders = make_dataloaders()
     model = construct_model()
     train(model, loaders)
     margins, acc = evaluate(model, loaders)
