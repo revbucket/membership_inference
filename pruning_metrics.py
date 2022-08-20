@@ -10,8 +10,10 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
-from kmeans_pytorch import kmeans
+#from kmeans_pytorch import kmeans
 from torch.cuda.amp import GradScaler, autocast
+from fast_pytorch_kmeans import KMeans
+
 
 
 
@@ -122,12 +124,10 @@ def make_selfsup_prototypes(swav_model, dataloader, k, device='cpu'):
         x = batch[0].to(device)
         reps.append(swav_model(x).cpu())
 
-    all_reps = torch.stack(reps)
-
-    _, cluster_centers = kmeans(X=reps, num_clusters=k, distance='euclidean',
-                                device=device)
-
-    return cluster_centers
+    all_reps = torch.cat(reps)
+    kmeans = KMeans(n_clusters=k, mode='euclidean', verbose=1)
+    _ = kmeans.fit_predict(all_reps)
+    return kmeans.centroids
 
 
 
