@@ -2,8 +2,10 @@ wandb/*
 shadows/*
 slurm_logs/*
 notebooks/*
+save/*
 *~
 *.tar
+*.ipynb
 *#
 
 __pycache__

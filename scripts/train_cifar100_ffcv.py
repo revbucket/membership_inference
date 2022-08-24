@@ -6,12 +6,14 @@
 from argparse import ArgumentParser
 from typing import List
 import time
+import os
 import numpy as np
 from tqdm import tqdm
 
 import torch as ch
 from torch.cuda.amp import GradScaler, autocast
 from torch.nn import CrossEntropyLoss, Conv2d, Identity
+import torch.nn.functional as F
 from torch.optim import SGD, lr_scheduler
 from torch.optim.lr_scheduler import _LRScheduler
 
@@ -188,33 +190,29 @@ def evaluate_privacy(index, model, loaders, anti_loaders):
     model = model.eval()
     all_docs = []
     for (loader_dict, member) in [(loaders, True), (anti_loaders, False)]:
-        for k in ['eval_train', 'test']:
-            base_doc = {'seed': index,
-                        'train': k == 'eval_train',
-                        'member': (member and (k == 'eval_train'))}
-
-            with @ch.no_grad():
-                for x, y, idxs in loader:
-                    bs = y.numel()
+        for k in ['eval_train']:
+            with ch.no_grad():
+                for x, y, idxs in loader_dict[k]:
                     with autocast():
+                        bs = y.numel()
                         logits = model(x)
                         xentropy = F.cross_entropy(logits, y, reduction='none')
                         correct_logits = logits[ch.arange(bs), y].clone()
-                        logits[ch.arange(bs), y] = -1000
+                        logits[ch.arange(bs), y] -= 1000.0
                         next_classes = logits.argmax(1)
                         runnnerup_logits = logits[ch.arange(bs), next_classes].clone()
-
                         margin = correct_logits - runnnerup_logits
                         one_v_all = ch.log(ch.exp(logits).sum(dim=1))
-
-
-                    data = torch.stack([idxs, xentropy, margin, one_v_all]).T
+                    data = ch.stack([idxs, xentropy, margin, one_v_all]).T
                     for exid, xent, marg, ova in data:
-                        new_doc = {'exid': exit.item(),
+                        new_doc = {'exid': int(exid.item()),
                                    'xentropy': xent.item(),
-                                   'margin': margin.item(),
-                                   'one_v_all': ova.item()}
-                        new_doc.update(base_doc)
+                                   'margin': marg.item(),
+                                   'one_v_all': ova.item(),
+                                   'seed': index,
+                                   'train': True,
+                                   'member': member}
+
                         all_docs.append(new_doc)
 
     return all_docs
@@ -244,15 +242,15 @@ def main(index, epochs=None, save_path=None, base_name=None,
     config.summary()
 
 
-    coll = Pymongo.MongoClient()[mongo_db][mongo_coll]
+    coll = MongoClient()[mongo_db][mongo_coll]
 
     indices = list(range(50 * 1000))
     np.random.seed(index)
     np.random.shuffle(indices)
-    indices = indices[:(25 * 1000)]
+    pro_indices = indices[:(25 * 1000)]
     anti_indices = indices[(25 * 1000):]
 
-    loaders = make_dataloaders(indices)
+    loaders = make_dataloaders(pro_indices)
     anti_loaders = make_dataloaders(anti_indices)
     model = construct_model()
 
@@ -267,5 +265,8 @@ def main(index, epochs=None, save_path=None, base_name=None,
 
     # And then save the model weights
     model = model.cpu()
+    if not(os.path.isdir(save_path)):
+        os.makedirs(save_path, exist_ok=True)
+        
     model_path = os.path.join(save_path, base_name + '_%04d' % index)
-    torch.save(model.state_dict(), model_path)
+    ch.save(model.state_dict(), model_path)
