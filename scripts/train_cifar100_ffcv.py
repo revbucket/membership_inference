@@ -44,10 +44,10 @@ Section('training', 'Hyperparameters').params(
     label_smoothing=Param(float, 'Value of label smoothing', default=0.1),
     num_workers=Param(int, 'The number of workers', default=4),
     lr_tta=Param(bool, 'Test time augmentation by averaging with horizontally flipped version', default=True),
-    gpu=Param(int, 'Which GPU to use', default=4),
+    gpu=Param(int, 'Which GPU to use', default=3), # Final A100 on DGX
     save_path=Param(str, 'location of path to save models',
                     default='/home/mgj528/grad/membership_inference/save/cifar100_mi/resnet18'),
-    base_name=Param(str, 'prefix of model names, like <base_name>_seed', default='seed')
+    base_name=Param(str, 'prefix of model names, like <base_name>_seed', default='seed'),
 )
 
 Section('data', 'data related stuff').params(
@@ -55,6 +55,8 @@ Section('data', 'data related stuff').params(
         default='/home/mgj528/datasets/ffcv/cifar100_train'), # REWRITE HARDCODE
     val_dataset=Param(str, '.dat file to use for validation',
         default='/home/mgj528/datasets/ffcv/cifar100_test'), # REWRITE HARDCODE
+    mongo_db=Param(str, 'database name for the mongodb', default='lira'),
+    mongo_coll=Param(str, 'collection name for the mongodb', default='resnet18_cifar100')
 )
 
 
@@ -163,11 +165,76 @@ def resume_train(model, loaders, opt, scheduler, loss_fn, num_epochs):
 
 
 
+def evaluate_privacy(index, model, loaders, anti_loaders):
+    """ Creates a list of mongo documents for all train/test images:
+        each doc looks a little like:
+        {seed: which seed of data to use,
+         exid: example_id,
+         train: boolean if in training or test set,
+         member: boolean if in training set's membership,
+         xentropy: crossEntropy score,
+         margin: correct vs incorrect margin,
+         one_v_all: correct logit minus logsumexp of other logits
+         }
+    ARGS:
+        index: which seed to use
+        model: loaded/trained model
+        loaders: result of make_dataloaders (with the training indices!)
+        anti_loaders: result of make_dataloaders with the inverse trainingindices
+    RETURNS:
+        list of docs (to be inserted into mongo)
+    """
+
+    model = model.eval()
+    all_docs = []
+    for (loader_dict, member) in [(loaders, True), (anti_loaders, False)]:
+        for k in ['eval_train', 'test']:
+            base_doc = {'seed': index,
+                        'train': k == 'eval_train',
+                        'member': (member and (k == 'eval_train'))}
+
+            with @ch.no_grad():
+                for x, y, idxs in loader:
+                    bs = y.numel()
+                    with autocast():
+                        logits = model(x)
+                        xentropy = F.cross_entropy(logits, y, reduction='none')
+                        correct_logits = logits[ch.arange(bs), y].clone()
+                        logits[ch.arange(bs), y] = -1000
+                        next_classes = logits.argmax(1)
+                        runnnerup_logits = logits[ch.arange(bs), next_classes].clone()
+
+                        margin = correct_logits - runnnerup_logits
+                        one_v_all = ch.log(ch.exp(logits).sum(dim=1))
+
+
+                    data = torch.stack([idxs, xentropy, margin, one_v_all]).T
+                    for exid, xent, marg, ova in data:
+                        new_doc = {'exid': exit.item(),
+                                   'xentropy': xent.item(),
+                                   'margin': margin.item(),
+                                   'one_v_all': ova.item()}
+                        new_doc.update(base_doc)
+                        all_docs.append(new_doc)
+
+    return all_docs
+
+
+
+
+
+
+
+
+
 
 @param('training.epochs')
 @param('training.save_path')
 @param('training.base_name')
-def main(index, epochs=None, save_path=None, base_name=None):
+@param('data.mongo_db')
+@param('data.mongo_coll')
+def main(index, epochs=None, save_path=None, base_name=None,
+         mongo_db=None, mongo_coll=None):
     config = get_current_config()
     parser = ArgumentParser(description='Fast CIFAR-10 training')
     config.augment_argparse(parser)
@@ -177,19 +244,28 @@ def main(index, epochs=None, save_path=None, base_name=None):
     config.summary()
 
 
+    coll = Pymongo.MongoClient()[mongo_db][mongo_coll]
+
     indices = list(range(50 * 1000))
     np.random.seed(index)
     np.random.shuffle(indices)
     indices = indices[:(25 * 1000)]
-    loaders = make_dataloaders()
+    anti_indices = indices[(25 * 1000):]
+
+    loaders = make_dataloaders(indices)
+    anti_loaders = make_dataloaders(anti_indices)
     model = construct_model()
 
     # Train 50 epochs
     opt, scheduler, loss_fn = setup_train(model, loaders)
     resume_train(model, loaders, opt, scheduler, loss_fn, epochs)
 
-    model = model.eval().cpu()
-    # And then save the model weights
 
+    # And evaluate afterwards
+    mongo_docs = evaluate_privacy(index, model, loaders, anti_loaders)
+    coll.insert_many(mongo_docs)
+
+    # And then save the model weights
+    model = model.cpu()
     model_path = os.path.join(save_path, base_name + '_%04d' % index)
     torch.save(model.state_dict(), model_path)
