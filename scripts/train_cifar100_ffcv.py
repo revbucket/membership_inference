@@ -28,7 +28,7 @@ from ffcv.transforms import RandomHorizontalFlip, Cutout, \
 from ffcv.transforms.common import Squeeze
 from pymongo import MongoClient
 
-import pruning_metrics as pm
+# import pruning_metrics as pm
 
 # ======================================================================
 # =           Setting Hyperparameters                                  =
@@ -176,8 +176,6 @@ def main(index, epochs=None, save_path=None, base_name=None):
     config.validate(mode='stderr')
     config.summary()
 
-
-    coll = MongoClient()[mongo_db][mongo_coll]
 
     indices = list(range(50 * 1000))
     np.random.seed(index)
