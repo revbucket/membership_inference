@@ -32,7 +32,26 @@ import pruning_metrics as pm
 # ======================================================================
 # =           Setting Hyperparameters                                  =
 # ======================================================================
-`
+
+
+
+Section('training', 'Hyperparameters').params(
+    lr=Param(float, 'The learning rate to use', default=0.1),
+    lr_peak_epoch=Param(int, 'Epoch at which LR peaks', default=20),
+    epochs=Param(int, 'Number of epochs to run for', default=50),
+    batch_size=Param(int, 'Batch size', default=512),
+    momentum=Param(float, 'Momentum for SGD', default=0.9),
+    weight_decay=Param(float, 'l2 weight decay', default=5e-4),
+    label_smoothing=Param(float, 'Value of label smoothing', default=0.1),
+    num_workers=Param(int, 'The number of workers', default=4),
+    lr_tta=Param(bool, 'Test time augmentation by averaging with horizontally flipped version', default=True),
+    gpu=Param(int, 'Which GPU to use', default=0),
+    round_size=Param(int, 'How many epochs to train between evaluations', default=2),
+    num_rounds=Param(int, 'How many rounds to run', default=10)
+
+)
+
+
 Section('data', 'data related stuff').params(
     train_dataset=Param(str, '.dat file to use for training',
         default='/home/mgj528/datasets/ffcv/cifar100_train'), # REWRITE HARDCODE
@@ -196,7 +215,7 @@ def evaluate_pruning(model, model_id, loaders, epoch):
     for k in ('eval_train', 'test'):
         for batch in tqdm(loaders[k]):
             el2n_batch = pm.el2n_minibatch(model, batch, 100).cpu().data
-            grand_batch = pm.grand_minibatch(model, batch)
+            grand_batch = pm.grand_min  ibatch(model, batch)
 
             output.extend([{'model_id': model_id,
                             'epoch': epoch,
